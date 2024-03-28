@@ -1,0 +1,129 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Project
+metadata:
+  name: kargo-demo
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  promotionPolicies:
+  - stage: test
+    autoPromotionEnabled: true
+  - stage: uat
+    autoPromotionEnabled: true
+---
+apiVersion: v1
+kind: Secret
+type: Opaque
+metadata:
+  name: kargo-demo
+  namespace: kargo-demo
+  labels:
+    kargo.akuity.io/cred-type: git
+stringData:
+  repoURL: https://github.com/example/repo.git
+  username: foo
+  password: bar
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: kargo-demo
+  namespace: kargo-demo
+  labels:
+    kargo.akuity.io/shard: foo
+spec:
+  subscriptions:
+  - image:
+      repoURL: nginx # Watch for new versions of this image
+      semverConstraint: ^1.24.0
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: test
+  namespace: kargo-demo
+  labels:
+    kargo.akuity.io/shard: foo
+spec:
+  subscriptions:
+    warehouse: kargo-demo
+  promotionMechanisms:
+    argoCDAppUpdates:
+    - appName: kargo-demo-test
+      sourceUpdates:
+      - repoURL: https://github.com/krancour/kargo-demo-gitops-2.git
+        kustomize:
+          images:
+          - image: nginx # Update Application to reference the new image version
+  verification:
+    analysisTemplates:
+    - name: kargo-demo
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: uat
+  namespace: kargo-demo
+  labels:
+    kargo.akuity.io/shard: foo
+spec:
+  subscriptions:
+    upstreamStages:
+    - name: test
+  promotionMechanisms:
+    argoCDAppUpdates:
+    - appName: kargo-demo-uat
+      sourceUpdates:
+      - repoURL: https://github.com/krancour/kargo-demo-gitops-2.git
+        kustomize:
+          images:
+          - image: nginx # Update Application to reference the new image version
+  verification:
+    analysisTemplates:
+    - name: kargo-demo
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: prod
+  namespace: kargo-demo
+  labels:
+    kargo.akuity.io/shard: foo
+spec:
+  subscriptions:
+    upstreamStages:
+    - name: uat
+  promotionMechanisms:
+    argoCDAppUpdates:
+    - appName: kargo-demo-prod
+      sourceUpdates:
+      - repoURL: https://github.com/krancour/kargo-demo-gitops-2.git
+        kustomize:
+          images:
+          - image: nginx # Update Application to reference the new image version
+  verification:
+    analysisTemplates:
+    - name: kargo-demo
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: kargo-demo
+  namespace: kargo-demo
+spec:
+  metrics:
+  - name: test
+    provider:
+      job:
+        metadata:
+        spec:
+          backoffLimit: 1
+          template:
+            spec:
+              containers:
+              - name: test
+                image: alpine:latest
+                command:
+                - sleep
+                - "20"
+              restartPolicy: Never
