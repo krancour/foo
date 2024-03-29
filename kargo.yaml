@@ -18,9 +18,10 @@ metadata:
   name: kargo-demo
   namespace: kargo-demo
   labels:
-    kargo.akuity.io/cred-type: git
+    kargo.akuity.io/secret-type: repository
 stringData:
-  repoURL: https://github.com/example/repo.git
+  type: git
+  url: https://github.com/example/repo.git
   username: foo
   password: bar
 ---
